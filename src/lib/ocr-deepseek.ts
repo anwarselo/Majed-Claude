@@ -213,28 +213,118 @@ export async function extractTextFromPDFWithOCR(
   pdfBuffer: Buffer,
   fileName: string = 'document.pdf'
 ): Promise<string> {
-  // First try regular text extraction
   const pdf = require('pdf-parse');
   
   try {
+    console.log(`📄 Processing PDF: ${fileName}`);
+    
+    // First try regular text extraction
     const data = await pdf(pdfBuffer);
     const extractedText = data.text || '';
     
-    // If we got meaningful text, return it
+    // If we got meaningful text (more than 50 chars), use it
     if (extractedText.trim().length > 50) {
-      console.log(`✅ PDF text extraction successful: ${extractedText.length} characters`);
+      console.log(`✅ PDF text layer found: ${extractedText.length} characters`);
       return extractedText;
     }
     
-    console.log(`⚠️ PDF has no text layer (likely scanned). Attempting OCR...`);
+    console.log(`⚠️ PDF has minimal/no text layer. Converting to images for OCR...`);
     
-    // PDF is likely scanned - need to convert to images and OCR
-    // For now, return a message. Full implementation would use pdf-to-image conversion
-    return `[This appears to be a scanned PDF. Full OCR support for PDFs will be added in the next update. For now, please convert the PDF pages to images and upload them individually.]`;
+    // PDF is scanned or has no text - convert to images and OCR
+    return await convertPDFToImagesAndOCR(pdfBuffer, fileName);
     
   } catch (error) {
     console.error('❌ PDF processing error:', error);
-    return '';
+    
+    // Try OCR as fallback
+    try {
+      console.log(`🔄 Attempting OCR fallback for PDF...`);
+      return await convertPDFToImagesAndOCR(pdfBuffer, fileName);
+    } catch (ocrError) {
+      console.error('❌ PDF OCR fallback failed:', ocrError);
+      return '';
+    }
+  }
+}
+
+/**
+ * Convert PDF pages to images and run OCR on each page
+ */
+async function convertPDFToImagesAndOCR(
+  pdfBuffer: Buffer,
+  fileName: string
+): Promise<string> {
+  try {
+    const { pdfToPng } = await import('pdf-to-png-converter');
+    
+    console.log(`🔄 Converting PDF to images...`);
+    
+    // Convert PDF to PNG images
+    const pngPages = await pdfToPng(pdfBuffer, {
+      viewportScale: 2.0, // Higher quality
+      outputFolder: undefined, // Return buffers, don't save to disk
+    });
+    
+    if (!pngPages || pngPages.length === 0) {
+      console.error('❌ No pages extracted from PDF');
+      return '[PDF conversion failed. Please try uploading individual pages as images.]';
+    }
+    
+    console.log(`📄 PDF converted to ${pngPages.length} page(s). Running OCR...`);
+    
+    // Run OCR on each page
+    const pageTexts: string[] = [];
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (let i = 0; i < pngPages.length; i++) {
+      const page = pngPages[i];
+      console.log(`\n📄 Processing page ${i + 1}/${pngPages.length}...`);
+      
+      try {
+        // Convert the page content to Buffer
+        const pageBuffer = page.content;
+        
+        // Run DeepSeek OCR on this page
+        const ocrResult = await extractTextWithDeepSeekOCR(
+          pageBuffer,
+          `${fileName}_page_${i + 1}.png`
+        );
+        
+        if (ocrResult.text && ocrResult.text.trim().length > 0) {
+          pageTexts.push(`\n--- Page ${i + 1} ---\n${ocrResult.text}`);
+          successCount++;
+          console.log(`✅ Page ${i + 1}: Extracted ${ocrResult.text.length} characters`);
+        } else {
+          console.warn(`⚠️ Page ${i + 1}: No text extracted`);
+          if (ocrResult.error) {
+            console.error(`❌ Page ${i + 1} error: ${ocrResult.error}`);
+          }
+          failCount++;
+        }
+      } catch (pageError) {
+        console.error(`❌ Error processing page ${i + 1}:`, pageError);
+        failCount++;
+      }
+    }
+    
+    // Combine all page texts
+    const fullText = pageTexts.join('\n\n');
+    
+    console.log(`\n📊 PDF OCR Summary:`);
+    console.log(`   ✅ Success: ${successCount} pages`);
+    console.log(`   ❌ Failed: ${failCount} pages`);
+    console.log(`   📝 Total text: ${fullText.length} characters`);
+    
+    if (fullText.trim().length === 0) {
+      return `[OCR failed to extract text from ${pngPages.length} page(s). The PDF may contain only images with no readable text.]`;
+    }
+    
+    return fullText;
+    
+  } catch (error) {
+    console.error('❌ PDF to image conversion failed:', error);
+    return `[PDF OCR failed: ${error instanceof Error ? error.message : String(error)}. Please try uploading pages as individual images.]`;
   }
 }
 
