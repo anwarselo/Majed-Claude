@@ -150,7 +150,7 @@ export default function HomePage() {
             id="file"
             name="file"
             required
-            accept=".pdf,.txt"
+            accept=".pdf,.txt,.png,.jpg,.jpeg,.gif,.webp,image/*"
             style={{
               width: '100%',
               padding: '10px',
@@ -160,7 +160,9 @@ export default function HomePage() {
             }}
           />
           <small style={{ color: '#666', display: 'block', marginTop: '5px' }}>
-            Supported formats: PDF, TXT (max 10MB)
+            Supported formats: PDF, TXT, PNG, JPG, GIF, WEBP (max 10MB)
+            <br />
+            Images use AI-powered OCR for text extraction
           </small>
         </div>
 

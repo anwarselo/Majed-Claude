@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { generateSlug } from '@/lib/utils';
 import { extractTextFromPDF, extractTextFromTxt } from '@/lib/extract';
+import { extractTextWithNovitaOCR, isImageFile } from '@/lib/ocr-novita';
 import { generateJsonLd, generateHtml } from '@/lib/render';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
-const BUCKET_NAME = 'business-files';
+const BUCKET_NAME = 'majed-claude-business-files';
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,10 +26,18 @@ export async function POST(req: NextRequest) {
     }
 
     // Check file type
-    const allowedTypes = ['application/pdf', 'text/plain'];
+    const allowedTypes = [
+      'application/pdf',
+      'text/plain',
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'image/gif',
+      'image/webp',
+    ];
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
-        { error: 'Only PDF and text files are supported' },
+        { error: 'Supported formats: PDF, TXT, PNG, JPG, GIF, WEBP' },
         { status: 400 }
       );
     }
@@ -92,6 +101,9 @@ export async function POST(req: NextRequest) {
       extractedText = await extractTextFromPDF(buffer);
     } else if (file.type === 'text/plain') {
       extractedText = extractTextFromTxt(buffer);
+    } else if (isImageFile(file.type)) {
+      // Use Novita AI DeepSeek OCR for images
+      extractedText = await extractTextWithNovitaOCR(buffer);
     }
 
     if (!extractedText.trim()) {
