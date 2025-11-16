@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { generateSlug } from '@/lib/utils';
 import { extractTextFromPDF, extractTextFromTxt } from '@/lib/extract';
-import { extractTextWithNovitaOCR, isImageFile } from '@/lib/ocr-novita';
+import { extractTextWithDeepSeekOCR, extractTextFromPDFWithOCR, isImageFile } from '@/lib/ocr-deepseek';
 import { generateJsonLd, generateHtml } from '@/lib/render';
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
@@ -97,17 +97,40 @@ export async function POST(req: NextRequest) {
 
     // Extract text from file
     let extractedText = '';
+    let ocrError = '';
+    
+    console.log(`📄 Processing file: ${file.name} (${file.type})`);
+    
     if (file.type === 'application/pdf') {
-      extractedText = await extractTextFromPDF(buffer);
+      // Try advanced PDF extraction with OCR fallback
+      extractedText = await extractTextFromPDFWithOCR(buffer, file.name);
+      if (!extractedText.trim()) {
+        // Fallback to basic extraction
+        extractedText = await extractTextFromPDF(buffer);
+      }
     } else if (file.type === 'text/plain') {
       extractedText = extractTextFromTxt(buffer);
     } else if (isImageFile(file.type)) {
-      // Use Novita AI DeepSeek OCR for images
-      extractedText = await extractTextWithNovitaOCR(buffer);
+      // Use DeepSeek OCR for images via Novita AI
+      console.log(`🖼️ Image detected, using DeepSeek OCR...`);
+      const ocrResult = await extractTextWithDeepSeekOCR(buffer, file.name);
+      extractedText = ocrResult.text;
+      ocrError = ocrResult.error || '';
+      
+      if (ocrError) {
+        console.error(`❌ OCR Error: ${ocrError}`);
+      }
     }
 
+    // If extraction completely failed, provide helpful message
     if (!extractedText.trim()) {
-      extractedText = 'Text extraction was not successful. Please view the original document.';
+      if (ocrError) {
+        extractedText = `Text extraction failed: ${ocrError}. Please view the original document or try a different file format.`;
+      } else {
+        extractedText = 'Text extraction was not successful. The document may be empty or use an unsupported format. Please view the original document.';
+      }
+    } else {
+      console.log(`✅ Text extracted successfully: ${extractedText.length} characters`);
     }
 
     // Generate JSON-LD and HTML
