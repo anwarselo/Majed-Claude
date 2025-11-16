@@ -5,7 +5,7 @@ export async function GET() {
   try {
     // Fetch all published pages
     const { data: pages } = await supabase
-      .from('pages')
+      .from('majed_claude_pages')
       .select('url, published_at')
       .order('published_at', { ascending: false })
       .limit(5000);

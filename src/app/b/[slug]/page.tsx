@@ -10,8 +10,8 @@ export default async function BusinessPage({ params }: PageProps) {
 
   // Fetch business and page data
   const { data: business, error } = await supabase
-    .from('businesses')
-    .select('*, pages(*)')
+    .from('majed_claude_businesses')
+    .select('*, majed_claude_pages(*)')
     .eq('slug', slug)
     .single();
 
@@ -19,7 +19,7 @@ export default async function BusinessPage({ params }: PageProps) {
     notFound();
   }
 
-  const page = business.pages?.[0];
+  const page = business.majed_claude_pages?.[0];
 
   if (!page) {
     return (
@@ -75,7 +75,7 @@ export async function generateMetadata({ params }: PageProps) {
   const { slug } = await params;
 
   const { data: business } = await supabase
-    .from('businesses')
+    .from('majed_claude_businesses')
     .select('name, description')
     .eq('slug', slug)
     .single();

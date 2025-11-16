@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
     // Create business record
     const { data: business, error: bizError } = await supabase
-      .from('businesses')
+      .from('majed_claude_businesses')
       .insert({
         slug,
         name,
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     if (uploadError) {
       console.error('File upload error:', uploadError);
       // Clean up business record
-      await supabase.from('businesses').delete().eq('id', business.id);
+      await supabase.from('majed_claude_businesses').delete().eq('id', business.id);
       return NextResponse.json(
         { error: 'Failed to upload file' },
         { status: 500 }
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
     const html = generateHtml(business, extractedText, sourceFileUrl);
 
     // Create page record
-    const { error: pageError } = await supabase.from('pages').insert({
+    const { error: pageError } = await supabase.from('majed_claude_pages').insert({
       business_id: business.id,
       url: `${BASE_URL}/b/${slug}`,
       html,
